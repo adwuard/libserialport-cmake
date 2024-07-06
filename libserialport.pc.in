@@ -1,0 +1,15 @@
+# sdl pkg-config source file
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libserialport
+Description: libserialport
+Version: 1.0.0
+Requires.private: 
+Conflicts:
+Libs: -L${libdir} -Wl,-rpath,${libdir} -Wl,--enable-new-dtags  -lserialport
+Libs.private:  -pthread  -lm
+Cflags: -I${includedir} -I${includedir}/libserialport  -D_REENTRANT

@@ -19,7 +19,7 @@
 
 #include "libserialport_internal.h"
 
-SP_PRIV void time_get(struct time *time)
+void time_get(struct time *time)
 {
 #ifdef _WIN32
 	LARGE_INTEGER count;
@@ -43,7 +43,7 @@ SP_PRIV void time_get(struct time *time)
 #endif
 }
 
-SP_PRIV void time_set_ms(struct time *time, unsigned int ms)
+void time_set_ms(struct time *time, unsigned int ms)
 {
 #ifdef _WIN32
 	LARGE_INTEGER frequency;
@@ -55,7 +55,7 @@ SP_PRIV void time_set_ms(struct time *time, unsigned int ms)
 #endif
 }
 
-SP_PRIV void time_add(const struct time *a,
+void time_add(const struct time *a,
 		const struct time *b, struct time *result)
 {
 #ifdef _WIN32
@@ -65,7 +65,7 @@ SP_PRIV void time_add(const struct time *a,
 #endif
 }
 
-SP_PRIV void time_sub(const struct time *a,
+void time_sub(const struct time *a,
 		const struct time *b, struct time *result)
 {
 #ifdef _WIN32
@@ -75,7 +75,7 @@ SP_PRIV void time_sub(const struct time *a,
 #endif
 }
 
-SP_PRIV bool time_greater(const struct time *a, const struct time *b)
+bool time_greater(const struct time *a, const struct time *b)
 {
 #ifdef _WIN32
 	return (a->ticks > b->ticks);
@@ -84,7 +84,7 @@ SP_PRIV bool time_greater(const struct time *a, const struct time *b)
 #endif
 }
 
-SP_PRIV void time_as_timeval(const struct time *time, struct timeval *tv)
+void time_as_timeval(const struct time *time, struct timeval *tv)
 {
 #ifdef _WIN32
 	LARGE_INTEGER frequency;
@@ -97,7 +97,7 @@ SP_PRIV void time_as_timeval(const struct time *time, struct timeval *tv)
 #endif
 }
 
-SP_PRIV unsigned int time_as_ms(const struct time *time)
+unsigned int time_as_ms(const struct time *time)
 {
 #ifdef _WIN32
 	LARGE_INTEGER frequency;
@@ -108,7 +108,7 @@ SP_PRIV unsigned int time_as_ms(const struct time *time)
 #endif
 }
 
-SP_PRIV void timeout_start(struct timeout *timeout, unsigned int timeout_ms)
+void timeout_start(struct timeout *timeout, unsigned int timeout_ms)
 {
 	timeout->ms = timeout_ms;
 
@@ -124,14 +124,14 @@ SP_PRIV void timeout_start(struct timeout *timeout, unsigned int timeout_ms)
 	timeout->calls_started = false;
 }
 
-SP_PRIV void timeout_limit(struct timeout *timeout, unsigned int limit_ms)
+void timeout_limit(struct timeout *timeout, unsigned int limit_ms)
 {
 	timeout->limit_ms = limit_ms;
 	timeout->overflow = (timeout->ms > timeout->limit_ms);
 	time_set_ms(&timeout->delta_max, timeout->limit_ms);
 }
 
-SP_PRIV bool timeout_check(struct timeout *timeout)
+bool timeout_check(struct timeout *timeout)
 {
 	if (!timeout->calls_started)
 		return false;
@@ -148,13 +148,13 @@ SP_PRIV bool timeout_check(struct timeout *timeout)
 	return time_greater(&timeout->now, &timeout->end);
 }
 
-SP_PRIV void timeout_update(struct timeout *timeout)
+void timeout_update(struct timeout *timeout)
 {
 	timeout->calls_started = true;
 }
 
 #ifndef _WIN32
-SP_PRIV struct timeval *timeout_timeval(struct timeout *timeout)
+struct timeval *timeout_timeval(struct timeout *timeout)
 {
 	if (timeout->ms == 0)
 		return NULL;
@@ -165,7 +165,7 @@ SP_PRIV struct timeval *timeout_timeval(struct timeout *timeout)
 }
 #endif
 
-SP_PRIV unsigned int timeout_remaining_ms(struct timeout *timeout)
+unsigned int timeout_remaining_ms(struct timeout *timeout)
 {
 	if (timeout->limit_ms && timeout->overflow)
 		return timeout->limit_ms;
