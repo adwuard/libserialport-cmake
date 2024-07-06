@@ -18,8 +18,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <config.h>
-#include "libserialport.h"
 #include "libserialport_internal.h"
 
 /* USB path is a string of at most 8 decimal numbers < 128 separated by dots. */
@@ -28,30 +26,41 @@
 static void enumerate_hub(struct sp_port *port, const char *hub_name,
                           const char *parent_path, DEVINST dev_inst);
 
-static char *wc_to_utf8(PWCHAR wc_buffer, ULONG size)
+static char *wc_to_utf8(PWCHAR wc_buffer, ULONG wc_bytes)
 {
-	WCHAR wc_str[(size / sizeof(WCHAR)) + 1];
-	char *utf8_str;
+	ULONG wc_length = wc_bytes / sizeof(WCHAR);
+	ULONG utf8_bytes;
+	WCHAR *wc_str = NULL;
+	char *utf8_str = NULL;
+
+	/* Allocate aligned wide char buffer */
+	if (!(wc_str = malloc((wc_length + 1) * sizeof(WCHAR))))
+		goto wc_to_utf8_end;
 
 	/* Zero-terminate the wide char string. */
-	memcpy(wc_str, wc_buffer, size);
-	wc_str[sizeof(wc_str) - 1] = 0;
+	memcpy(wc_str, wc_buffer, wc_bytes);
+	wc_str[wc_length] = 0;
 
 	/* Compute the size of the UTF-8 converted string. */
-	if (!(size = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wc_str, -1,
+	if (!(utf8_bytes = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wc_str, -1,
 	                                 NULL, 0, NULL, NULL)))
-		return NULL;
+		goto wc_to_utf8_end;
 
 	/* Allocate UTF-8 output buffer. */
-	if (!(utf8_str = malloc(size)))
-		return NULL;
+	if (!(utf8_str = malloc(utf8_bytes)))
+		goto wc_to_utf8_end;
 
 	/* Actually converted to UTF-8. */
 	if (!WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wc_str, -1,
-	                         utf8_str, size, NULL, NULL)) {
+	                         utf8_str, utf8_bytes, NULL, NULL)) {
 		free(utf8_str);
-		return NULL;
+		utf8_str = NULL;
+		goto wc_to_utf8_end;
 	}
+
+wc_to_utf8_end:
+	if (wc_str)
+		free(wc_str);
 
 	return utf8_str;
 }
@@ -81,7 +90,7 @@ static char *get_root_hub_name(HANDLE host_controller)
 	}
 
 	/* Convert the root hub name string to UTF-8. */
-	root_hub_name_utf8 = wc_to_utf8(root_hub_name_wc->RootHubName, size);
+	root_hub_name_utf8 = wc_to_utf8(root_hub_name_wc->RootHubName, size - offsetof(USB_ROOT_HUB_NAME, RootHubName));
 	free(root_hub_name_wc);
 	return root_hub_name_utf8;
 }
@@ -116,7 +125,7 @@ static char *get_external_hub_name(HANDLE hub, ULONG connection_index)
 	}
 
 	/* Convert the external hub name string to UTF-8. */
-	ext_hub_name_utf8 = wc_to_utf8(ext_hub_name_wc->NodeName, size);
+	ext_hub_name_utf8 = wc_to_utf8(ext_hub_name_wc->NodeName, size - offsetof(USB_NODE_CONNECTION_NAME, NodeName));
 	free(ext_hub_name_wc);
 	return ext_hub_name_utf8;
 }
@@ -134,7 +143,7 @@ static char *get_string_descriptor(HANDLE hub_device, ULONG connection_index,
 	desc_req->SetupPacket.wValue = (USB_STRING_DESCRIPTOR_TYPE << 8)
 	                               | descriptor_index;
 	desc_req->SetupPacket.wIndex = 0;
-	desc_req->SetupPacket.wLength = size - sizeof(*desc_req);
+	desc_req->SetupPacket.wLength = (USHORT) (size - sizeof(*desc_req));
 
 	if (!DeviceIoControl(hub_device,
 	                     IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION,
@@ -145,7 +154,7 @@ static char *get_string_descriptor(HANDLE hub_device, ULONG connection_index,
 	    || desc->bLength % 2)
 		return NULL;
 
-	return wc_to_utf8(desc->bString, desc->bLength);
+	return wc_to_utf8(desc->bString, desc->bLength - offsetof(USB_STRING_DESCRIPTOR, bString));
 }
 
 static void enumerate_hub_ports(struct sp_port *port, HANDLE hub_device,
@@ -219,7 +228,7 @@ static void enumerate_hub_ports(struct sp_port *port, HANDLE hub_device,
 			port->usb_pid = connection_info_ex->DeviceDescriptor.idProduct;
 
 			if (connection_info_ex->DeviceDescriptor.iManufacturer)
-				port->usb_manufacturer = get_string_descriptor(hub_device,index,
+				port->usb_manufacturer = get_string_descriptor(hub_device, index,
 				           connection_info_ex->DeviceDescriptor.iManufacturer);
 			if (connection_info_ex->DeviceDescriptor.iProduct)
 				port->usb_product = get_string_descriptor(hub_device, index,
@@ -256,8 +265,8 @@ static void enumerate_hub(struct sp_port *port, const char *hub_name,
 		return;
 	strcpy(device_name, "\\\\.\\");
 	strcat(device_name, hub_name);
-	hub_device = CreateFile(device_name, GENERIC_WRITE, FILE_SHARE_WRITE,
-	                        NULL, OPEN_EXISTING, 0, NULL);
+	hub_device = CreateFileA(device_name, GENERIC_WRITE, FILE_SHARE_WRITE,
+	                         NULL, OPEN_EXISTING, 0, NULL);
 	free(device_name);
 	if (hub_device == INVALID_HANDLE_VALUE)
 		return;
@@ -380,7 +389,7 @@ SP_PRIV enum sp_return get_port_details(struct sp_port *port)
 			continue;
 		}
 		RegCloseKey(device_key);
-		value[sizeof(value)-1] = 0;
+		value[sizeof(value) - 1] = 0;
 		if (strcmp(value, port->name))
 			continue;
 
@@ -458,9 +467,9 @@ SP_PRIV enum sp_return get_port_details(struct sp_port *port)
 			if (!(escaped_port_name = malloc(strlen(port->name) + 5)))
 				RETURN_ERROR(SP_ERR_MEM, "Escaped port name malloc failed");
 			sprintf(escaped_port_name, "\\\\.\\%s", port->name);
-			handle = CreateFile(escaped_port_name, GENERIC_READ, 0, 0,
-			                    OPEN_EXISTING,
-			                    FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OVERLAPPED, 0);
+			handle = CreateFileA(escaped_port_name, GENERIC_READ, 0, 0,
+			                     OPEN_EXISTING,
+			                     FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OVERLAPPED, 0);
 			free(escaped_port_name);
 			CloseHandle(handle);
 
@@ -482,19 +491,26 @@ SP_PRIV enum sp_return list_ports(struct sp_port ***list)
 	DWORD max_value_len, max_data_size, max_data_len;
 	DWORD value_len, data_size, data_len;
 	DWORD type, index = 0;
+	LSTATUS result;
 	char *name;
 	int name_len;
 	int ret = SP_OK;
 
 	DEBUG("Opening registry key");
-	if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, _T("HARDWARE\\DEVICEMAP\\SERIALCOMM"),
-			0, KEY_QUERY_VALUE, &key) != ERROR_SUCCESS) {
-		SET_FAIL(ret, "RegOpenKeyEx() failed");
+	if ((result = RegOpenKeyEx(HKEY_LOCAL_MACHINE, _T("HARDWARE\\DEVICEMAP\\SERIALCOMM"),
+			0, KEY_QUERY_VALUE, &key)) != ERROR_SUCCESS) {
+		/* It's possible for this key to not exist if there are no serial ports
+		 * at all. In that case we're done. Return a failure for any other error. */
+		if (result != ERROR_FILE_NOT_FOUND) {
+			SetLastError(result);
+			SET_FAIL(ret, "RegOpenKeyEx() failed");
+		}
 		goto out_done;
 	}
 	DEBUG("Querying registry key value and data sizes");
-	if (RegQueryInfoKey(key, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-				&max_value_len, &max_data_size, NULL, NULL) != ERROR_SUCCESS) {
+	if ((result = RegQueryInfoKey(key, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				&max_value_len, &max_data_size, NULL, NULL)) != ERROR_SUCCESS) {
+		SetLastError(result);
 		SET_FAIL(ret, "RegQueryInfoKey() failed");
 		goto out_close;
 	}

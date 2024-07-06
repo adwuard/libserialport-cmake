@@ -21,23 +21,44 @@
 #ifndef LIBSERIALPORT_LIBSERIALPORT_INTERNAL_H
 #define LIBSERIALPORT_LIBSERIALPORT_INTERNAL_H
 
+/* These MSVC-specific defines must appear before other headers.*/
+#ifdef _MSC_VER
+#define _CRT_NONSTDC_NO_DEPRECATE
+#define _CRT_SECURE_NO_WARNINGS
+#endif
 
-#ifdef __linux__
-/* For timeradd, timersub, timercmp. */
+/* These feature test macros must appear before other headers.*/
+#if defined(__linux__) || defined(__CYGWIN__)
+/* For timeradd, timersub, timercmp, realpath. */
 #define _BSD_SOURCE 1 /* for glibc < 2.19 */
 #define _DEFAULT_SOURCE 1 /* for glibc >= 2.20 */
+/* For clock_gettime and associated types. */
+#define _POSIX_C_SOURCE 199309L
 #endif
+
+#ifdef LIBSERIALPORT_ATBUILD
+/* If building with autoconf, include the generated config.h. */
+#include <config.h>
+#endif
+
+#ifdef LIBSERIALPORT_MSBUILD
+/* If building with MS tools, define necessary things that
+   would otherwise appear in config.h. */
+#define SP_PRIV
+#endif
+
+#include "libserialport.h"
 
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdarg.h>
-#include <limits.h>
+#include <stdbool.h>
+#include <stdint.h>
 #ifdef _WIN32
 #include <windows.h>
 #include <tchar.h>
@@ -48,13 +69,22 @@
 	static const GUID name = { l,w1,w2,{ b1,b2,b3,b4,b5,b6,b7,b8 } }
 #include <usbioctl.h>
 #include <usbiodef.h>
+/* The largest size that can be passed to WriteFile() safely
+ * on any architecture. This arises from the expression:
+ * PAGE_SIZE * (65535 - sizeof(MDL)) / sizeof(ULONG_PTR)
+ * and this worst-case value is found on x64. */
+#define WRITEFILE_MAX_SIZE 33525760
 #else
 #include <limits.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
-#include <limits.h>
+#include <time.h>
 #include <poll.h>
+#include <unistd.h>
+#ifdef HAVE_SYS_FILE_H
+#include <sys/file.h>
+#endif
 #endif
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
@@ -62,11 +92,13 @@
 #include <IOKit/serial/IOSerialKeys.h>
 #include <IOKit/serial/ioss.h>
 #include <sys/syslimits.h>
+#include <mach/mach_time.h>
 #endif
 #ifdef __linux__
 #include <dirent.h>
-#ifndef __ANDROID__
-#include "linux/serial.h"
+/* Android only has linux/serial.h from platform 21 onwards. */
+#if !(defined(__ANDROID__) && (__ANDROID_API__ < 21))
+#include <linux/serial.h>
 #endif
 #include "linux_termios.h"
 
@@ -84,8 +116,18 @@
 #define TIOCOUTQ FIONWRITE
 #endif
 
+/*
+ * O_CLOEXEC is not available everywhere, fallback to not setting the
+ * flag on those systems.
+ */
+#ifndef _WIN32
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+#endif
+
 /* Non-standard baudrates are not available everywhere. */
-#if (defined(HAVE_TERMIOS_SPEED) || defined(HAVE_TERMIOS2_SPEED)) && defined(HAVE_DECL_BOTHER)
+#if (defined(HAVE_TERMIOS_SPEED) || defined(HAVE_TERMIOS2_SPEED)) && HAVE_DECL_BOTHER
 #define USE_TERMIOS_SPEED
 #endif
 
@@ -109,7 +151,8 @@ struct sp_port {
 	OVERLAPPED read_ovl;
 	OVERLAPPED wait_ovl;
 	DWORD events;
-	BYTE pending_byte;
+	BYTE *write_buf;
+	DWORD write_buf_size;
 	BOOL writing;
 	BOOL wait_running;
 #else
@@ -228,10 +271,41 @@ extern void (*sp_debug_handler)(const char *format, ...);
 
 #define TRY(x) do { int retval = x; if (retval != SP_OK) RETURN_CODEVAL(retval); } while (0)
 
-SP_PRIV struct sp_port **list_append(struct sp_port **list, const char *portname);
+struct sp_port **list_append(struct sp_port **list, const char *portname);
 
 /* OS-specific Helper functions. */
-SP_PRIV enum sp_return get_port_details(struct sp_port *port);
-SP_PRIV enum sp_return list_ports(struct sp_port ***list);
+enum sp_return get_port_details(struct sp_port *port);
+enum sp_return list_ports(struct sp_port ***list);
+
+/* Timing abstraction */
+
+struct time {
+#ifdef _WIN32
+	int64_t ticks;
+#else
+	struct timeval tv;
+#endif
+};
+
+struct timeout {
+	unsigned int ms, limit_ms;
+	struct time start, now, end, delta, delta_max;
+	struct timeval delta_tv;
+	bool calls_started, overflow;
+};
+
+void time_get(struct time *time);
+void time_set_ms(struct time *time, unsigned int ms);
+void time_add(const struct time *a, const struct time *b, struct time *result);
+void time_sub(const struct time *a, const struct time *b, struct time *result);
+bool time_greater(const struct time *a, const struct time *b);
+void time_as_timeval(const struct time *time, struct timeval *tv);
+unsigned int time_as_ms(const struct time *time);
+void timeout_start(struct timeout *timeout, unsigned int timeout_ms);
+void timeout_limit(struct timeout *timeout, unsigned int limit_ms);
+bool timeout_check(struct timeout *timeout);
+void timeout_update(struct timeout *timeout);
+struct timeval *timeout_timeval(struct timeout *timeout);
+unsigned int timeout_remaining_ms(struct timeout *timeout);
 
 #endif
