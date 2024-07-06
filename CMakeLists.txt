@@ -40,3 +40,8 @@ target_link_libraries(${PROJECT_NAME}-static cfgmgr32 SetupAPI)
 target_link_libraries(${PROJECT_NAME}-shared cfgmgr32 SetupAPI)
 endif()
 
+install(TARGETS ${PROJECT_NAME}-static ${PROJECT_NAME}-shared
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib)
+

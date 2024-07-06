@@ -1,18 +1,27 @@
 /* config.h.  Generated from config.h.in by configure.  */
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* clock_gettime is available. */
+#define HAVE_CLOCK_GETTIME 1
+
 /* Define to 1 if you have the declaration of `BOTHER', and to 0 if you don't.
    */
-#define HAVE_DECL_BOTHER 0
+#define HAVE_DECL_BOTHER 1
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
-/* #undef HAVE_DLFCN_H */
+#define HAVE_DLFCN_H 1
+
+/* flock is available. */
+#define HAVE_FLOCK 1
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
 
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
+
+/* realpath is available. */
+#define HAVE_REALPATH 1
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #define HAVE_STDINT_H 1
@@ -27,16 +36,16 @@
 #define HAVE_STRING_H 1
 
 /* Define to 1 if the system has the type `struct serial_struct'. */
-/* #undef HAVE_STRUCT_SERIAL_STRUCT */
+#define HAVE_STRUCT_SERIAL_STRUCT 1
 
 /* Define to 1 if the system has the type `struct termios2'. */
-/* #undef HAVE_STRUCT_TERMIOS2 */
+#define HAVE_STRUCT_TERMIOS2 1
 
 /* Define to 1 if `c_ispeed' is a member of `struct termios2'. */
-/* #undef HAVE_STRUCT_TERMIOS2_C_ISPEED */
+#define HAVE_STRUCT_TERMIOS2_C_ISPEED 1
 
 /* Define to 1 if `c_ospeed' is a member of `struct termios2'. */
-/* #undef HAVE_STRUCT_TERMIOS2_C_OSPEED */
+#define HAVE_STRUCT_TERMIOS2_C_OSPEED 1
 
 /* Define to 1 if `c_ispeed' is a member of `struct termios'. */
 /* #undef HAVE_STRUCT_TERMIOS_C_ISPEED */
@@ -44,8 +53,8 @@
 /* Define to 1 if `c_ospeed' is a member of `struct termios'. */
 /* #undef HAVE_STRUCT_TERMIOS_C_OSPEED */
 
-/* Define to 1 if the system has the type `struct termiox'. */
-/* #undef HAVE_STRUCT_TERMIOX */
+/* sys/file.h is available. */
+#define HAVE_SYS_FILE_H 1
 
 /* Define to 1 if you have the <sys/stat.h> header file. */
 #define HAVE_SYS_STAT_H 1
@@ -56,8 +65,7 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
 
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
+/* Define to the sub-directory where libtool stores uninstalled libraries. */
 #define LT_OBJDIR ".libs/"
 
 /* Enumeration is unsupported. */
@@ -85,7 +93,7 @@
 #define PACKAGE_VERSION "0.1.1"
 
 /* Macro preceding public API functions */
-#define SP_API __declspec(dllexport)
+#define SP_API __attribute__((visibility("default")))
 
 /* . */
 #define SP_LIB_VERSION_AGE 1
@@ -112,7 +120,7 @@
 #define SP_PACKAGE_VERSION_STRING "0.1.1"
 
 /* Macro preceding private functions */
-#define SP_PRIV 
+#define SP_PRIV __attribute__((visibility("hidden")))
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
@@ -123,7 +131,7 @@
 #endif
 
 /* Number of bits in a file offset, on hosts where this is settable. */
-#define _FILE_OFFSET_BITS 64
+/* #undef _FILE_OFFSET_BITS */
 
 /* Define for large files, on AIX-style hosts. */
 /* #undef _LARGE_FILES */
